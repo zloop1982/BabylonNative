@@ -1,23 +1,31 @@
-cmake_minimum_required(VERSION 3.12)
+# cmake 3.15.3+ because of a c++ regression when swift is enable
+cmake_minimum_required(VERSION 3.15.3)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 project(BabylonNative)
 
-set(SUPPORTED_PLATFORMS "Win32")
-set(BABYLON_NATIVE_PLATFORM "Win32" CACHE STRING "Target platform for Babylon Native.")
-if(NOT(BABYLON_NATIVE_PLATFORM IN_LIST SUPPORTED_PLATFORMS))
-    message(FATAL_ERROR "Unrecognized platform: ${BABYLON_NATIVE_PLATFORM}")
+if (APPLE)
+    # without this option on azure pipelines, there is a mismatch with math.h giving a lot of undefined functions on macOS.
+    # only enabled for Apple as there is no issue for UWP/WIN32
+    set(CMAKE_NO_SYSTEM_FROM_IMPORTED TRUE)
+endif()
+
+if(ANDROID)
+    set(BABYLON_NATIVE_PLATFORM "Android")
+elseif(APPLE)
+    set(BABYLON_NATIVE_PLATFORM "Apple")
+elseif(WINDOWS_STORE)
+    set(BABYLON_NATIVE_PLATFORM "UWP")
+elseif(WIN32)
+    set(BABYLON_NATIVE_PLATFORM "Win32")
+else()
+    message(FATAL_ERROR "Unrecognized platform: ${CMAKE_SYSTEM_NAME}")
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
-
-if(${CMAKE_CXX_COMPILER} MATCHES "x86/cl.exe$")
-    set(ARCH "x86")
-elseif(${CMAKE_CXX_COMPILER} MATCHES "x64/cl.exe$")
-    set(ARCH "x64")
-else()
-    message(FATAL_ERROR "Unrecognized compiler: ${CMAKE_CXX_COMPILER}")
-endif()
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(Library)
+if(NOT ANDROID)
 add_subdirectory(TestApp)
+endif()

@@ -1,16 +1,19 @@
-﻿#include <Babylon/RuntimeWin32.h>
+#include <Babylon/RuntimeWin32.h>
 #include "RuntimeImpl.h"
+
+#include "NativeXr.h"
+
 #include <filesystem>
 
-namespace babylon
+namespace Babylon
 {
     RuntimeWin32::RuntimeWin32(HWND hWnd)
-        : RuntimeWin32{ hWnd, GetUrlFromPath(GetModulePath().parent_path()) }
+        : RuntimeWin32{hWnd, GetUrlFromPath(GetModulePath().parent_path())}
     {
     }
 
     RuntimeWin32::RuntimeWin32(HWND hWnd, const std::string& rootUrl)
-        : Runtime{ std::make_unique<RuntimeImpl>(hWnd, rootUrl) }
+        : Runtime{std::make_unique<RuntimeImpl>(hWnd, rootUrl)}
     {
         RECT rect;
         if (GetWindowRect(hWnd, &rect))
@@ -26,6 +29,10 @@ namespace babylon
         HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
         assert(SUCCEEDED(hr));
         auto coInitializeScopeGuard = gsl::finally([] { CoUninitialize(); });
+
+        Dispatch([](Env& env) {
+            InitializeNativeXr(env);
+        });
 
         RuntimeImpl::BaseThreadProcedure();
     }

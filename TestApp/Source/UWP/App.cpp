@@ -1,11 +1,10 @@
-﻿#include "App.h"
+#include "App.h"
 
-#include <Runtime/CommonUWP.h>
+#include <Babylon/Console.h>
 
 #include <pplawait.h>
 #include <winrt/Windows.ApplicationModel.h>
 
-#include <sstream>
 #include <filesystem>
 
 using namespace Windows::ApplicationModel;
@@ -86,7 +85,6 @@ void App::SetWindow(CoreWindow^ window)
 
     window->KeyDown +=
         ref new TypedEventHandler<CoreWindow^, KeyEventArgs^>(this, &App::OnKeyPressed);
-
 }
 
 // Initializes scene resources, or loads a previously saved app state.
@@ -126,35 +124,45 @@ void App::OnActivated(CoreApplicationView^ applicationView, IActivatedEventArgs^
         m_fileActivatedArgs = nullptr;
     }
 
-    RestartRuntimeAsync();
+    RestartRuntimeAsync(applicationView->CoreWindow->Bounds);
 }
 
-concurrency::task<void> App::RestartRuntimeAsync()
+concurrency::task<void> App::RestartRuntimeAsync(Windows::Foundation::Rect bounds)
 {
     m_inputBuffer.reset();
     m_runtime.reset();
 
-    std::stringstream rootUrl{};
-    if (m_fileActivatedArgs == nullptr)
-    {
-        auto path = std::filesystem::current_path();
-        rootUrl << "file:///" << path.generic_string();
-    }
-    else
+    std::string appUrl{ "file:///" + std::filesystem::current_path().generic_string() };
+
+    std::string rootUrl{ appUrl };
+    if (m_fileActivatedArgs != nullptr)
     {
         auto file = static_cast<Windows::Storage::IStorageFile^>(m_fileActivatedArgs->Files->GetAt(0));
         const auto path = winrt::to_string(file->Path->Data());
         auto parentPath = std::filesystem::path{ path }.parent_path();
-        rootUrl << "file:///" << parentPath.generic_string();
+        rootUrl = "file:///" + parentPath.generic_string();
     }
 
-    m_runtime = std::make_unique<babylon::RuntimeUWP>(reinterpret_cast<ABI::Windows::UI::Core::ICoreWindow*>(CoreWindow::GetForCurrentThread()), rootUrl.str());
+    m_runtime = std::make_unique<Babylon::RuntimeUWP>(
+        reinterpret_cast<ABI::Windows::UI::Core::ICoreWindow*>(CoreWindow::GetForCurrentThread()), rootUrl);
+
+    m_runtime->Dispatch([](Babylon::Env& env)
+    {
+        Babylon::Console::CreateInstance(env, [](const char* message, auto)
+        {
+            OutputDebugStringA(message);
+        });
+    });
+
     m_inputBuffer = std::make_unique<InputManager::InputBuffer>(*m_runtime);
     InputManager::Initialize(*m_runtime, *m_inputBuffer);
 
+    m_runtime->LoadScript(appUrl + "/Scripts/babylon.max.js");
+    m_runtime->LoadScript(appUrl + "/Scripts/babylon.glTF2FileLoader.js");
+
     if (m_fileActivatedArgs == nullptr)
     {
-        m_runtime->RunScript("Scripts\\experience.js");
+        m_runtime->LoadScript("Scripts/experience.js");
     }
     else
     {
@@ -163,11 +171,16 @@ concurrency::task<void> App::RestartRuntimeAsync()
             auto file = static_cast<Windows::Storage::IStorageFile^>(m_fileActivatedArgs->Files->GetAt(idx));
             const auto path = winrt::to_string(file->Path->Data());
             auto text = co_await Windows::Storage::FileIO::ReadTextAsync(file);
-            m_runtime->RunScript(winrt::to_string(text->Data()), path);
+            m_runtime->Eval(winrt::to_string(text->Data()), path);
         }
 
-        m_runtime->RunScript("Scripts\\playground_runner.js");
+        m_runtime->LoadScript(appUrl + "/Scripts/playground_runner.js");
     }
+
+    DisplayInformation^ displayInformation = DisplayInformation::GetForCurrentView();
+    m_displayScale = static_cast<float>(displayInformation->RawPixelsPerViewPixel);
+
+    m_runtime->UpdateSize(bounds.Width * m_displayScale, bounds.Height * m_displayScale);
 }
 
 void App::OnSuspending(Platform::Object^ sender, SuspendingEventArgs^ args)
@@ -187,14 +200,14 @@ void App::OnResuming(Platform::Object^ sender, Platform::Object^ args)
     // and state are persisted when resuming from suspend. Note that this event
     // does not occur if the app was previously terminated.
 
-    // Insert your code here.
+    m_runtime->Resume();
 }
 
 // Window event handlers.
 
 void App::OnWindowSizeChanged(CoreWindow^ /*sender*/, WindowSizeChangedEventArgs^ args)
 {
-    m_runtime->UpdateSize(args->Size.Width, args->Size.Height);
+    m_runtime->UpdateSize(args->Size.Width * m_displayScale, args->Size.Height * m_displayScale);
 }
 
 void App::OnVisibilityChanged(CoreWindow^ sender, VisibilityChangedEventArgs^ args)
@@ -223,11 +236,11 @@ void App::OnPointerReleased(CoreWindow^, PointerEventArgs^)
     m_inputBuffer->SetPointerDown(false);
 }
 
-void App::OnKeyPressed(CoreWindow^, KeyEventArgs^ args)
+void App::OnKeyPressed(CoreWindow^ window, KeyEventArgs^ args)
 {
     if (args->VirtualKey == VirtualKey::R)
     {
-        RestartRuntimeAsync();
+        RestartRuntimeAsync(window->Bounds);
     }
 }
 
@@ -235,7 +248,9 @@ void App::OnKeyPressed(CoreWindow^, KeyEventArgs^ args)
 
 void App::OnDpiChanged(DisplayInformation^ /*sender*/, Object^ /*args*/)
 {
-    m_runtime->UpdateRenderTarget();
+    DisplayInformation^ displayInformation = DisplayInformation::GetForCurrentView();
+    m_displayScale = static_cast<float>(displayInformation->RawPixelsPerViewPixel);
+    // resize event happens after. No need to force resize here.
 }
 
 void App::OnOrientationChanged(DisplayInformation^ sender, Object^ args)

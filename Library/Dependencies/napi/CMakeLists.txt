@@ -2,13 +2,29 @@ cmake_minimum_required(VERSION 3.12)
 
 project(napi)
 
-set(SUPPORTED_JAVASCRIPT_ENGINES "Chakra" "V8")
+if (ANDROID)
+    set(NAPI_JAVASCRIPT_ENGINE "V8")
+elseif (APPLE)
+    set(NAPI_JAVASCRIPT_ENGINE "JavaScriptCore")
+endif()
+
+set(SUPPORTED_JAVASCRIPT_ENGINES "Chakra" "V8" "JavaScriptCore")
 set(NAPI_JAVASCRIPT_ENGINE "V8" CACHE STRING "JavaScript engine for N-API.")
 if(NOT(NAPI_JAVASCRIPT_ENGINE IN_LIST SUPPORTED_JAVASCRIPT_ENGINES))
     message(FATAL_ERROR "Unrecognized engine: ${NAPI_JAVASCRIPT_ENGINE}")
 endif()
 
-if(NAPI_JAVASCRIPT_ENGINE STREQUAL "V8")
+if(NAPI_JAVASCRIPT_ENGINE STREQUAL "V8" AND NOT ANDROID)
+    if(${CMAKE_CXX_COMPILER} MATCHES "x86/cl.exe$")
+        set(ARCH "x86")
+    elseif(${CMAKE_CXX_COMPILER} MATCHES "x64/cl.exe$")
+        set(ARCH "x64")
+    elseif(${CMAKE_CXX_COMPILER} MATCHES "arm/cl.exe$")
+        set(ARCH "ARM")
+    else()
+        message(FATAL_ERROR "Unrecognized compiler: ${CMAKE_CXX_COMPILER}")
+    endif()
+
     set(NUGET_PATH "${CMAKE_BINARY_DIR}/NuGet")
     set(NUGET_EXE "${NUGET_PATH}/nuget.exe")
     if(NOT EXISTS ${NUGET_EXE})
@@ -53,11 +69,18 @@ endif()
 add_library(napi ${SOURCES})
 
 target_compile_definitions(napi PRIVATE NOMINMAX)
+target_compile_definitions(napi PRIVATE _CRT_SECURE_NO_WARNINGS)
 
 target_compile_definitions(napi PUBLIC NODE_ADDON_API_DISABLE_DEPRECATED)
+target_compile_definitions(napi PUBLIC NODE_ADDON_API_DISABLE_NODE_SPECIFIC)
 
 if(NAPI_JAVASCRIPT_ENGINE STREQUAL "Chakra")
     target_compile_definitions(napi PRIVATE USE_EDGEMODE_JSRT)
+endif()
+
+# V8 android build until we figured out how to deal with custom V8 nugget
+if (ANDROID)
+    target_include_directories(napi PUBLIC "../v8/include")
 endif()
 
 target_include_directories(napi PUBLIC "include")

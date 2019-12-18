@@ -1,10 +1,10 @@
 #include <Babylon/Runtime.h>
 #include "RuntimeImpl.h"
 
-namespace babylon
+namespace Babylon
 {
     Runtime::Runtime(std::unique_ptr<RuntimeImpl> impl)
-        : m_impl{ std::move(impl) }
+        : m_impl{std::move(impl)}
     {
     }
 
@@ -17,14 +17,14 @@ namespace babylon
         m_impl->UpdateSize(width, height);
     }
 
-    void Runtime::UpdateRenderTarget()
-    {
-        m_impl->UpdateRenderTarget();
-    }
-
     void Runtime::Suspend()
     {
         m_impl->Suspend();
+    }
+
+    void Runtime::Resume()
+    {
+        m_impl->Resume();
     }
 
     void Runtime::LoadScript(const std::string& url)
@@ -37,17 +37,9 @@ namespace babylon
         m_impl->Eval(string, url);
     }
 
-    void Runtime::Execute(std::function<void(Runtime&)> func)
+    void Runtime::Dispatch(std::function<void(Env&)> func)
     {
-        m_impl->Execute([this, func = std::move(func)](auto&)
-        {
-            func(*this);
-        });
-    }
-
-    babylon::Env& Runtime::Env() const
-    {
-        return m_impl->Env();
+        m_impl->Dispatch(func);
     }
 
     const std::string& Runtime::RootUrl() const

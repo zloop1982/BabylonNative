@@ -2,6 +2,8 @@ var wireframe = false;
 var turntable = false;
 var logfps = true;
 var ibl = false;
+var rtt = false;
+var xr = false;
 
 function CreateBoxAsync() {
     BABYLON.Mesh.CreateBox("box1", 0.7);
@@ -66,10 +68,9 @@ CreateBoxAsync().then(function () {
 //BABYLON.SceneLoader.AppendAsync("https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMan/glTF/CesiumMan.gltf").then(function () {
     BABYLON.Tools.Log("Loaded");
 
-    scene.createDefaultCamera(true);
-    scene.activeCamera.alpha += Math.PI;
-    
-    CreateInputHandling(scene);
+	scene.createDefaultCamera(true);
+	scene.activeCamera.alpha += Math.PI;
+	CreateInputHandling(scene);
 
     if (ibl) {
         scene.createDefaultEnvironment({ createGround: false, createSkybox: false });
@@ -88,9 +89,29 @@ CreateBoxAsync().then(function () {
         }
     }
 
+    if (rtt) {
+        var rttTexture = new BABYLON.RenderTargetTexture("rtt", 1024, scene);
+        scene.meshes.forEach(mesh => {
+            rttTexture.renderList.push(mesh);
+        });
+        rttTexture.activeCamera = scene.activeCamera;
+        rttTexture.vScale = -1;
+
+        scene.customRenderTargets.push(rttTexture);
+
+        var rttMaterial = new BABYLON.StandardMaterial("rttMaterial", scene);
+        rttMaterial.diffuseTexture = rttTexture;
+
+        var plane = BABYLON.MeshBuilder.CreatePlane("rttPlane", { width: 4, height: 4 }, scene);
+        plane.position.y = 1;
+        plane.position.z = -5;
+        plane.rotation.y = Math.PI;
+        plane.material = rttMaterial;
+    }
+
     if (turntable) {
         scene.beforeRender = function () {
-            scene.meshes[0].rotation.y += 0.005 * scene.getAnimationRatio();
+            scene.meshes[0].rotate(BABYLON.Vector3.Up(), 0.005 * scene.getAnimationRatio());
         };
     }
 
@@ -106,6 +127,19 @@ CreateBoxAsync().then(function () {
     engine.runRenderLoop(function () {
         scene.render();
     });
+
+    if (xr) {
+        setTimeout(function () {
+            scene.createDefaultXRExperienceAsync({ disableDefaultUI: true }).then((xr) => {
+                setTimeout(function () {
+                    scene.meshes[0].position = scene.activeCamera.getFrontPosition(2);
+                    scene.meshes[0].rotate(BABYLON.Vector3.Up(), 3.14159);
+                }, 5000);
+                return xr.baseExperience.enterXRAsync("immersive-vr", "unbounded", xr.renderTarget);
+            });
+        }, 5000);
+    }
+    
 }, function (ex) {
     console.log(ex.message, ex.stack);
 });

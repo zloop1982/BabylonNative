@@ -2,13 +2,11 @@
 #include "RuntimeImpl.h"
 #include <curl/curl.h>
 
-namespace babylon
+namespace Babylon
 {
-    Napi::FunctionReference XMLHttpRequest::constructor;
-
-    void XMLHttpRequest::Initialize(Napi::Env& env, RuntimeImpl& runtimeImpl)
+    Napi::FunctionReference XMLHttpRequest::CreateConstructor(Napi::Env& env)
     {
-        Napi::HandleScope scope{ env };
+        Napi::HandleScope scope{env};
 
         Napi::Function func = DefineClass(
             env,
@@ -29,18 +27,14 @@ namespace babylon
                 InstanceMethod("removeEventListener", &XMLHttpRequest::RemoveEventListener),
                 InstanceMethod("open", &XMLHttpRequest::Open),
                 InstanceMethod("send", &XMLHttpRequest::Send),
-            },
-            &runtimeImpl);
+            });
 
-        constructor = Napi::Persistent(func);
-        constructor.SuppressDestruct();
-
-        env.Global().Set("XMLHttpRequest", func);
+        return Napi::Persistent(func);
     }
 
     XMLHttpRequest::XMLHttpRequest(const Napi::CallbackInfo& info)
-        : Napi::ObjectWrap<XMLHttpRequest>{ info }
-        , m_runtimeImpl{ *static_cast<RuntimeImpl*>(info.Data()) }
+        : Napi::ObjectWrap<XMLHttpRequest>{info}
+        , m_runtimeImpl{RuntimeImpl::GetRuntimeImplFromJavaScript(info.Env())}
     {
     }
 
@@ -125,8 +119,8 @@ namespace babylon
     void XMLHttpRequest::Send(const Napi::CallbackInfo& info)
     {
         auto lock = m_runtimeImpl.AcquireTaskLock();
-        m_runtimeImpl.Task = m_runtimeImpl.Task.then(arcana::inline_scheduler, arcana::cancellation::none(), [this]
-        {
+
+        m_runtimeImpl.Task = m_runtimeImpl.Task.then(arcana::inline_scheduler, arcana::cancellation::none(), [this] {
             return SendAsync();
         });
     }
@@ -136,26 +130,24 @@ namespace babylon
     {
         if (m_responseType.empty() || m_responseType == XMLHttpRequestTypes::ResponseType::Text)
         {
-            return m_runtimeImpl.LoadUrlAsync<std::string>(m_url).then(arcana::inline_scheduler, m_runtimeImpl.Cancellation(), [this](const std::string& data)
-            {
+            return m_runtimeImpl.LoadUrlAsync<std::string>(m_url).then(arcana::inline_scheduler, m_runtimeImpl.Cancellation(), [this](const std::string& data) {
                 m_responseText = std::move(data);
-                m_status = winrt::Windows::Web::Http::HttpStatusCode::Ok;
+                m_status = HTTPStatusCode::Ok;
                 SetReadyState(ReadyState::Done);
             });
         }
         else if (m_responseType == XMLHttpRequestTypes::ResponseType::ArrayBuffer)
         {
-            return m_runtimeImpl.LoadUrlAsync<std::vector<char>>(m_url).then(arcana::inline_scheduler, m_runtimeImpl.Cancellation(), [this](const std::vector<char>& data)
-            {
+            return m_runtimeImpl.LoadUrlAsync<std::vector<char>>(m_url).then(arcana::inline_scheduler, m_runtimeImpl.Cancellation(), [this](const std::vector<char>& data) {
                 m_response = Napi::Persistent(Napi::ArrayBuffer::New(Env(), data.size()));
                 memcpy(m_response.Value().Data(), data.data(), data.size());
-                m_status = winrt::Windows::Web::Http::HttpStatusCode::Ok;
+                m_status = HTTPStatusCode::Ok;
                 SetReadyState(ReadyState::Done);
             });
         }
         else
         {
-            throw std::exception("Invalid response type");
+            throw std::exception();
         }
     }
 
@@ -173,4 +165,5 @@ namespace babylon
             }
         }
     }
+
 }

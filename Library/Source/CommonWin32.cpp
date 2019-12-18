@@ -2,13 +2,13 @@
 #include <Windows.h>
 #include <Shlwapi.h>
 
-namespace babylon
+namespace Babylon
 {
     std::filesystem::path GetModulePath()
     {
         char buffer[1024];
         ::GetModuleFileNameA(nullptr, buffer, ARRAYSIZE(buffer));
-        return std::filesystem::path{ buffer };
+        return std::filesystem::path{buffer};
     }
 
     std::string GetUrlFromPath(const std::filesystem::path& path)
@@ -21,6 +21,6 @@ namespace babylon
             throw std::exception("Failed to create url from path", hr);
         }
 
-        return { url };
+        return {url};
     }
 }

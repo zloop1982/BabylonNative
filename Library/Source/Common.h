@@ -1,13 +1,24 @@
 #pragma once
 
 #include <arcana/threading/dispatcher.h>
-#include <filesystem>
 
-namespace babylon
+#if defined(__APPLE__) || defined(__ANDROID__)
+struct Filepath : public std::string
+{
+    const std::string& u8string() const
+    {
+        return *this;
+    }
+};
+#else
+#include <filesystem>
+typedef std::filesystem::path Filepath;
+#endif
+
+namespace Babylon
 {
     using babylon_dispatcher = arcana::dispatcher<128>;
 
-    std::filesystem::path GetModulePath();
-
-    std::string GetUrlFromPath(const std::filesystem::path& path);
+    Filepath GetModulePath();
+    std::string GetUrlFromPath(const Filepath& path);
 }

@@ -1,15 +1,20 @@
 #include "XMLHttpRequest.h"
 
-#include <Runtime/Common.h>
+#include "Common.h"
+#include "RuntimeImpl.h"
 
-#include <arcana/threading/task_conversions.h>
 #include <robuffer.h>
 #include <winrt/Windows.Storage.Streams.h>
 
-namespace babylon
+// Included after the WinRT headers because they enable non-WinRT interfaces. If this were included before
+// the WinRT headers, we'd have to explicitly include unknwn.h, or build would fail with C2338.
+#include <arcana/threading/task_conversions.h>
+
+namespace Babylon
 {
     arcana::task<void, std::exception_ptr> XMLHttpRequest::SendAsync()
     {
+        // clang-format off
         return SendAsyncImpl()
             .then(arcana::inline_scheduler, m_runtimeImpl.Cancellation(), [url = m_url, responseType = m_responseType, this](arcana::expected<void, std::exception_ptr> result)
         {
@@ -59,7 +64,7 @@ namespace babylon
                 }).then(m_runtimeImpl.Dispatcher(), m_runtimeImpl.Cancellation(), [this, url = std::move(url)]
                 {
                     m_responseURL = url;
-                    m_status = winrt::Windows::Web::Http::HttpStatusCode::Ok;
+                    m_status = HTTPStatusCode::Ok;
 
                     SetReadyState(ReadyState::Done);
                 });
@@ -69,5 +74,6 @@ namespace babylon
                 return arcana::task_from_result<std::exception_ptr>();
             }
         });
+        // clang-format off
     }
 }

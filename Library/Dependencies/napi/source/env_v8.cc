@@ -1,7 +1,7 @@
 #include <napi/env.h>
 #include <napi/js_native_api_types.h>
 #include "js_native_api_v8.h"
-#include <libplatform/libplatform.h>
+#include "libplatform/libplatform.h"
 
 namespace
 {
@@ -50,7 +50,8 @@ namespace
 
     void DestroyIsolate(v8::Isolate* isolate)
     {
-        delete isolate->GetArrayBufferAllocator();
+        // todo : GetArrayBufferAllocator not available?
+        //delete isolate->GetArrayBufferAllocator();
         isolate->Dispose();
     }
 
@@ -87,7 +88,7 @@ namespace
     };
 }
 
-namespace babylon
+namespace Babylon
 {
     Env::Env(const char* executablePath, std::function<void(std::function<void()>)> executeOnScriptThread)
         : Napi::Env{ new napi_env_local{ CreateIsolate(executablePath) } }
